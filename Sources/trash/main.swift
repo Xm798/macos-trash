@@ -26,9 +26,28 @@ func prompt(question: String) -> Bool {
 	return ["y", "yes"].contains(input.lowercased())
 }
 
-guard let argument = CLI.arguments.first else {
-	print("Specify one or more paths", to: .standardError)
-	exit(1)
+// Filter out rm-compatible flags that should be ignored.
+func filterRmFlags(_ arguments: [String]) -> [String] {
+    arguments.compactMap { arg in
+        if arg.hasPrefix("-") && !arg.hasPrefix("--") {
+            let flags = arg.dropFirst()
+            let filtered = flags.filter { $0 != "r" && $0 != "R" && $0 != "f" }
+            if !filtered.isEmpty {
+                return "-" + String(filtered)
+            } else {
+                return nil
+            }
+        }
+        return arg
+    }
+}
+
+
+let arguments = filterRmFlags(CLI.arguments)
+
+guard let argument = arguments.first else {
+    print("Specify one or more paths", to: .standardError)
+    exit(1)
 }
 
 // Handle positionals, at the point when no other flags will be accepted.
@@ -47,12 +66,13 @@ func collectPaths(arguments: some Collection<String>) -> any Collection<String> 
 switch argument {
 case "--help", "-h":
 	print("Usage: trash [--help | -h] [--version | -v] [--interactive | -i] <path> […]")
+	print("\nNote: -r, -R, and -f flags are accepted and ignored for rm compatibility.")
 	exit(0)
 case "--version", "-v":
 	print(VERSION)
 	exit(0)
 case "--interactive", "-i":
-	for url in (collectPaths(arguments: CLI.arguments.dropFirst()).map { URL(fileURLWithPath: $0) }) {
+	for url in (collectPaths(arguments: arguments.dropFirst()).map { URL(fileURLWithPath: $0) }) {
 		guard FileManager.default.fileExists(atPath: url.path) else {
 			print("The file “\(url.relativePath)” doesn't exist.")
 			continue
@@ -66,5 +86,5 @@ case "--interactive", "-i":
 	}
 default:
 	// TODO: Use `URL(filePath:` when tarrgeting macOS 15.
-	trash(collectPaths(arguments: CLI.arguments).map { URL(fileURLWithPath: $0) })
+	trash(collectPaths(arguments: arguments).map { URL(fileURLWithPath: $0) })
 }
